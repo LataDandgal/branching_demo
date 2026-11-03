@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Login & Register</title>
+<style>
+:root{--bg:#eef2f6;--card:#fff;--text:#1b2733;--muted:#5d6b78;--line:#cfd8e1;--accent:#1f6feb;--accent-text:#fff;--err:#c62828;--ok:#2e7d32;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1720;--card:#18222d;--text:#e8eef4;--muted:#9aa9b8;--line:#2c3a48;--accent:#4c8dff;--accent-text:#0b1520;--err:#ff6b6b;--ok:#6fcf7a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1720;--card:#18222d;--text:#e8eef4;--muted:#9aa9b8;--line:#2c3a48;--accent:#4c8dff;--accent-text:#0b1520;--err:#ff6b6b;--ok:#6fcf7a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.card{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px}
+h1{font-size:1.4rem;margin:0 0 4px}
+p.sub{margin:0 0 20px;color:var(--muted);font-size:.95rem}
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:10px;font:inherit;color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+label{display:block;font-size:.9rem;margin:14px 0 6px}
+input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.submit{width:100%;margin-top:20px;padding:11px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-text);font:inherit;font-weight:600;cursor:pointer}
+.msg{min-height:1.3em;margin-top:14px;font-size:.9rem}
+.msg.err{color:var(--err)}.msg.ok{color:var(--ok)}
+.hidden{display:none}
+.logout{background:none;border:1px solid var(--line);color:var(--text);margin-top:20px}
+</style>
+</head>
+<body>
+<main class="card">
+  <section id="auth">
+    <h1>Welcome to Sprint branch</h1>
+    <p class="sub">Log in or create an account.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-login" aria-selected="true">Log in</button>
+      <button role="tab" id="tab-register" aria-selected="false">Register</button>
+    </div>
+
+    <div id="login-form">
+      <label for="l-user">Username</label>
+      <input id="l-user" autocomplete="username">
+      <label for="l-pass">Password</label>
+      <input id="l-pass" type="password" autocomplete="current-password">
+      <button class="submit" id="login-btn">Log in</button>
+    </div>
+
+    <div id="register-form" class="hidden">
+      <label for="r-user">Username</label>
+      <input id="r-user" autocomplete="username">
+      <label for="r-pass">Password (6+ characters)</label>
+      <input id="r-pass" type="password" autocomplete="new-password">
+      <label for="r-pass2">Confirm password</label>
+      <input id="r-pass2" type="password" autocomplete="new-password">
+      <button class="submit" id="register-btn">Create account</button>
+    </div>
+    <div class="msg" id="msg" role="alert"></div>
+  </section>
+
+  <section id="welcome" class="hidden">
+    <h1 id="hello"></h1>
+    <p class="sub">You are logged in.</p>
+    <button class="submit logout" id="logout-btn">Log out</button>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const USERS_KEY = "demo_users", SESSION_KEY = "demo_session";
+let memUsers = {}, memSession = null; // fallback if storage is blocked
+
+function loadUsers(){ try{ return JSON.parse(localStorage.getItem(USERS_KEY)) || {}; }catch(e){ return memUsers; } }
+function saveUsers(u){ memUsers = u; try{ localStorage.setItem(USERS_KEY, JSON.stringify(u)); }catch(e){} }
+function getSession(){ try{ return localStorage.getItem(SESSION_KEY); }catch(e){ return memSession; } }
+function setSession(n){ memSession = n; try{ n ? localStorage.setItem(SESSION_KEY, n) : localStorage.removeItem(SESSION_KEY); }catch(e){} }
+
+async function hash(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+function show(text, type){ const m = $("msg"); m.textContent = text; m.className = "msg " + (type || ""); }
+
+function switchTab(which){
+  const login = which === "login";
+  $("login-form").classList.toggle("hidden", !login);
+  $("register-form").classList.toggle("hidden", login);
+  $("tab-login").setAttribute("aria-selected", login);
+  $("tab-register").setAttribute("aria-selected", !login);
+  show("");
+}
+function render(){
+  const user = getSession();
+  $("auth").classList.toggle("hidden", !!user);
+  $("welcome").classList.toggle("hidden", !user);
+  if(user) $("hello").textContent = "Hello, " + user + "!";
+}
+
+$("tab-login").onclick = () => switchTab("login");
+$("tab-register").onclick = () => switchTab("register");
+
+$("register-btn").onclick = async () => {
+  const name = $("r-user").value.trim(), p1 = $("r-pass").value, p2 = $("r-pass2").value;
+  if(!name || !p1) return show("Enter a username and password.", "err");
+  if(p1.length < 6) return show("Password must be at least 6 characters.", "err");
+  if(p1 !== p2) return show("Passwords do not match.", "err");
+  const users = loadUsers(), key = name.toLowerCase();
+  if(users[key]) return show("That username is taken. Choose another.", "err");
+  users[key] = { name, pass: await hash(p1) };
+  saveUsers(users);
+  $("r-user").value = $("r-pass").value = $("r-pass2").value = "";
+  switchTab("login");
+  show("Account created. You can log in now.", "ok");
+};
+
+$("login-btn").onclick = async () => {
+  const name = $("l-user").value.trim(), pass = $("l-pass").value;
+  const user = loadUsers()[name.toLowerCase()];
+  if(!user || user.pass !== await hash(pass)) return show("Wrong username or password.", "err");
+  setSession(user.name);
+  $("l-user").value = $("l-pass").value = "";
+  show("");
+  render();
+};
+
+$("logout-btn").onclick = () => { setSession(null); switchTab("login"); render(); };
+document.addEventListener("keydown", e => {
+  if(e.key !== "Enter") return;
+  if(!$("login-form").classList.contains("hidden")) $("login-btn").click();
+  else if(!$("register-form").classList.contains("hidden")) $("register-btn").click();
+});
+render();
+</script>
+</body>
+</html>
